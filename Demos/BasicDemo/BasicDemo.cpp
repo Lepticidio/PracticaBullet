@@ -218,8 +218,6 @@ void	BasicDemo::initPhysics()
 			}
 		}
 	}
-
-
 }
 void	BasicDemo::clientResetScene()
 {

@@ -44,6 +44,9 @@ extern char MyHeightfield[];
 #define MIN_TOWER_FLOORS 12
 #define MAX_TOWER_FLOORS 24
 
+#define MIN_TOWER_POSITION_X 100
+#define MIN_TOWER_POSITION_Z 100
+
 #define M_PI_2     1.57079632679489661923
 #define M_PI_4     0.785398163397448309616
 #define M_PI_8     0.5 * M_PI_4
@@ -188,13 +191,42 @@ void VehicleDemo::createTower(btScalar posX, btScalar posZ)
 	float start_y = START_POS_Y;
 	float start_z = posZ - ARRAY_SIZE_Z / 2;
 
-	int i, j, k;
-	//esta es la posicion inicial de los cubos
-	startTransform.setOrigin(SCALING*btVector3(
-		btScalar(2.0*i + start_x),
-		btScalar(2.0*k + start_y),
-		btScalar(2.0*j + start_z)));
+	btBoxShape* colShape = new btBoxShape(btVector3(SCALING * 1, SCALING * 1, SCALING * 1));
+	//btCollisionShape* colShape = new btSphereShape(btScalar(1.));
+	m_collisionShapes.push_back(colShape);
 
+	btScalar	mass(1.f);
+
+	//rigidbody is dynamic if and only if mass is non zero, otherwise static
+	bool isDynamic = (mass != 0.f);
+
+	btVector3 localInertia(0, 0, 0);
+	if (isDynamic)
+		colShape->calculateLocalInertia(mass, localInertia);
+
+	int iNumberFloors = MIN_TOWER_FLOORS + UnitRand() * (MAX_TOWER_FLOORS - MIN_TOWER_FLOORS);
+	for (int k = 0; k < iNumberFloors; k++)
+	{
+		for (int i = 0; i < ARRAY_SIZE_X; i++)
+		{
+			for (int j = 0; j < ARRAY_SIZE_Z; j++)
+			{
+				//esta es la posicion inicial de los cubos
+				startTransform.setOrigin(SCALING * btVector3(
+					btScalar(2.0 * i + start_x),
+					btScalar(2.0 * k + start_y),
+					btScalar(2.0 * j + start_z)));
+
+				//using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
+				btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
+				btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, colShape, localInertia);
+				btRigidBody* body = new btRigidBody(rbInfo);
+
+
+				m_dynamicsWorld->addRigidBody(body);
+			}
+		}
+	}
 }
 
 btRaycastVehicle* VehicleDemo::createVagon( btRaycastVehicle* parent_vehicle)
@@ -339,7 +371,10 @@ tr.setIdentity();
 		}
 	}
 
-	
+	for (int i = 0; i < MIN_TOWERS; i++)
+	{
+		createTower(SignedUnitRand() * MIN_TOWER_POSITION_X, SignedUnitRand() * MIN_TOWER_POSITION_Z);
+	}
 	setCameraDistance(26.f);
 
 }
