@@ -249,6 +249,85 @@ btRaycastVehicle* VehicleDemo::createVagon( btRaycastVehicle* parent_vehicle)
 	btScalar parentSizeY = (aabbMax.getY() - aabbMin.getY()); //altura del coche
 	btScalar parentSizeZ = (aabbMax.getZ() - aabbMin.getZ()); //longitud del coche
 
+
+	//copied from vehicle
+
+	btTransform tr;
+	tr.setIdentity();
+
+	btCollisionShape* chassisShape = new btBoxShape(btVector3(1.f, 0.5f, 2.f));
+	m_collisionShapes.push_back(chassisShape);
+
+	btCompoundShape* compound = new btCompoundShape();
+	m_collisionShapes.push_back(compound);
+	btTransform localTrans;
+	localTrans.setIdentity();
+	//localTrans effectively shifts the center of mass with respect to the chassis
+	localTrans.setOrigin(btVector3(0, 1, 0));
+
+
+	compound->addChildShape(localTrans, chassisShape);
+
+	tr.setOrigin(parentPos +  btVector3(0, 0.f, 5));
+
+	btRigidBody* wagonChassis = localCreateRigidBody(800, tr, compound);//chassisShape);
+	//m_carChassis->setDamping(0.2,0.2);
+
+	m_wheelShape = new btCylinderShapeX(btVector3(wheelWidth, wheelRadius, wheelRadius));
+
+	//m_vehicleRayCaster = new btDefaultVehicleRaycaster(m_dynamicsWorld);
+	btRaycastVehicle* pWagon = new btRaycastVehicle(m_tuning, wagonChassis, m_vehicleRayCaster);
+
+	///never deactivate the vehicle
+	m_carChassis->setActivationState(DISABLE_DEACTIVATION);
+
+	m_dynamicsWorld->addVehicle(m_vehicle);
+
+	float connectionHeight = 1.2f;
+
+	bool isFrontWheel = true;
+
+	//choose coordinate system
+	pWagon->setCoordinateSystem(rightIndex, upIndex, forwardIndex);
+
+#ifdef FORCE_ZAXIS_UP
+	btVector3 connectionPointCS0(CUBE_HALF_EXTENTS - (0.3 * wheelWidth), 2 * CUBE_HALF_EXTENTS - wheelRadius, connectionHeight);
+#else
+	btVector3 connectionPointCS0(CUBE_HALF_EXTENTS - (0.3 * wheelWidth), connectionHeight, 2 * CUBE_HALF_EXTENTS - wheelRadius);
+#endif
+
+	pWagon->addWheel(connectionPointCS0, wheelDirectionCS0, wheelAxleCS, suspensionRestLength, wheelRadius, m_tuning, isFrontWheel);
+#ifdef FORCE_ZAXIS_UP
+	connectionPointCS0 = btVector3(-CUBE_HALF_EXTENTS + (0.3 * wheelWidth), 2 * CUBE_HALF_EXTENTS - wheelRadius, connectionHeight);
+#else
+	connectionPointCS0 = btVector3(-CUBE_HALF_EXTENTS + (0.3 * wheelWidth), connectionHeight, 2 * CUBE_HALF_EXTENTS - wheelRadius);
+#endif
+
+	pWagon->addWheel(connectionPointCS0, wheelDirectionCS0, wheelAxleCS, suspensionRestLength, wheelRadius, m_tuning, isFrontWheel);
+#ifdef FORCE_ZAXIS_UP
+	connectionPointCS0 = btVector3(-CUBE_HALF_EXTENTS + (0.3 * wheelWidth), -2 * CUBE_HALF_EXTENTS + wheelRadius, connectionHeight);
+#else
+	connectionPointCS0 = btVector3(-CUBE_HALF_EXTENTS + (0.3 * wheelWidth), connectionHeight, -2 * CUBE_HALF_EXTENTS + wheelRadius);
+#endif //FORCE_ZAXIS_UP
+	isFrontWheel = false;
+	pWagon->addWheel(connectionPointCS0, wheelDirectionCS0, wheelAxleCS, suspensionRestLength, wheelRadius, m_tuning, isFrontWheel);
+#ifdef FORCE_ZAXIS_UP
+	connectionPointCS0 = btVector3(CUBE_HALF_EXTENTS - (0.3 * wheelWidth), -2 * CUBE_HALF_EXTENTS + wheelRadius, connectionHeight);
+#else
+	connectionPointCS0 = btVector3(CUBE_HALF_EXTENTS - (0.3 * wheelWidth), connectionHeight, -2 * CUBE_HALF_EXTENTS + wheelRadius);
+#endif
+	pWagon->addWheel(connectionPointCS0, wheelDirectionCS0, wheelAxleCS, suspensionRestLength, wheelRadius, m_tuning, isFrontWheel);
+
+	for (int i = 0; i < pWagon->getNumWheels(); i++)
+	{
+		btWheelInfo& wheel = pWagon->getWheelInfo(i);
+		wheel.m_suspensionStiffness = suspensionStiffness;
+		wheel.m_wheelsDampingRelaxation = suspensionDamping;
+		wheel.m_wheelsDampingCompression = suspensionCompression;
+		wheel.m_frictionSlip = wheelFriction;
+		wheel.m_rollInfluence = rollInfluence;
+	}
+	return pWagon;
 }
 
 void VehicleDemo::initPhysics()
@@ -370,6 +449,9 @@ tr.setIdentity();
 			wheel.m_rollInfluence = rollInfluence;
 		}
 	}
+
+	btRaycastVehicle* pWagon1 =  createVagon(m_vehicle);
+	btRaycastVehicle* pWagon2 = createVagon(pWagon1);
 
 	for (int i = 0; i < MIN_TOWERS; i++)
 	{
