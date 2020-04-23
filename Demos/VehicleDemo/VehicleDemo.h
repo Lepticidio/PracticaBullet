@@ -48,6 +48,8 @@ class VehicleDemo : public GlutDemoApplication
 	btRaycastVehicle::btVehicleTuning	m_tuning;
 	btVehicleRaycaster*	m_vehicleRayCaster;
 	btRaycastVehicle*	m_vehicle;
+	btRaycastVehicle* m_pWagon1;
+	btRaycastVehicle* m_pWagon2;
 	btCollisionShape*	m_wheelShape;
 
 	float		m_cameraHeight;

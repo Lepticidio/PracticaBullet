@@ -268,7 +268,7 @@ btRaycastVehicle* VehicleDemo::createVagon( btRaycastVehicle* parent_vehicle)
 
 	compound->addChildShape(localTrans, chassisShape);
 
-	tr.setOrigin(parentPos +  btVector3(0, 0.f, 5));
+	tr.setOrigin(parentPos +  btVector3(0, 0.f, -5));
 
 	btRigidBody* wagonChassis = localCreateRigidBody(800, tr, compound);//chassisShape);
 	//m_carChassis->setDamping(0.2,0.2);
@@ -281,7 +281,7 @@ btRaycastVehicle* VehicleDemo::createVagon( btRaycastVehicle* parent_vehicle)
 	///never deactivate the vehicle
 	m_carChassis->setActivationState(DISABLE_DEACTIVATION);
 
-	m_dynamicsWorld->addVehicle(m_vehicle);
+	m_dynamicsWorld->addVehicle(pWagon);
 
 	float connectionHeight = 1.2f;
 
@@ -450,8 +450,8 @@ tr.setIdentity();
 		}
 	}
 
-	btRaycastVehicle* pWagon1 =  createVagon(m_vehicle);
-	btRaycastVehicle* pWagon2 = createVagon(pWagon1);
+	m_pWagon1 =  createVagon(m_vehicle);
+	m_pWagon2 = createVagon(m_pWagon1);
 
 	for (int i = 0; i < MIN_TOWERS; i++)
 	{
@@ -486,6 +486,24 @@ void VehicleDemo::renderme()
 		//draw wheels (cylinders)
 		m_vehicle->getWheelInfo(i).m_worldTransform.getOpenGLMatrix(m);
 		m_shapeDrawer->drawOpenGL(m,m_wheelShape,wheelColor,getDebugMode(),worldBoundsMin,worldBoundsMax);
+	}
+
+	for (i = 0; i < m_pWagon1->getNumWheels(); i++)
+	{
+		//synchronize the wheels with the (interpolated) chassis worldtransform
+		m_pWagon1->updateWheelTransform(i, true);
+		//draw wheels (cylinders)
+		m_pWagon1->getWheelInfo(i).m_worldTransform.getOpenGLMatrix(m);
+		m_shapeDrawer->drawOpenGL(m, m_wheelShape, wheelColor, getDebugMode(), worldBoundsMin, worldBoundsMax);
+	}
+
+	for (i = 0; i < m_pWagon2->getNumWheels(); i++)
+	{
+		//synchronize the wheels with the (interpolated) chassis worldtransform
+		m_pWagon2->updateWheelTransform(i, true);
+		//draw wheels (cylinders)
+		m_pWagon2->getWheelInfo(i).m_worldTransform.getOpenGLMatrix(m);
+		m_shapeDrawer->drawOpenGL(m, m_wheelShape, wheelColor, getDebugMode(), worldBoundsMin, worldBoundsMax);
 	}
 
 
