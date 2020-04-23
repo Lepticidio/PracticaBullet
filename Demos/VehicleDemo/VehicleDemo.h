@@ -77,6 +77,10 @@ class VehicleDemo : public GlutDemoApplication
 
 	void initPhysics();
 
+	void VehicleDemo::createTower(btScalar posX, btScalar posZ);
+
+	btRaycastVehicle* createVagon(btRaycastVehicle* parent);
+
 	static DemoApplication* Create()
 	{
 		VehicleDemo* demo = new VehicleDemo();

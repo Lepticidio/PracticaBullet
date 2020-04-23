@@ -13,19 +13,40 @@ subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-/// September 2006: VehicleDemo is work in progress, this file is mostly just a placeholder
+/// September 2006: VehicleDemo is work in progress, this file is mostly just a placeholderw
 /// This VehicleDemo file is very early in development, please check it later
 /// One todo is a basic engine model:
 /// A function that maps user input (throttle) into torque/force applied on the wheels
 /// with gears etc.
 #include "btBulletDynamicsCommon.h"
 #include "BulletCollision/CollisionShapes/btHeightfieldTerrainShape.h"
+#include <stdlib.h>
+#include <time.h>
+
 extern char MyHeightfield[];
 //
 // By default, Bullet Vehicle uses Y as up axis.
 // You can override the up axis, for example Z-axis up. Enable this define to see how to:
 //#define FORCE_ZAXIS_UP 1
 //
+
+#define ARRAY_SIZE_X 3
+#define ARRAY_SIZE_Y 10
+#define ARRAY_SIZE_Z 3
+
+#define SCALING 1.
+#define START_POS_X 50
+#define START_POS_Y 4
+#define START_POS_Z 50
+
+#define MIN_TOWERS 10
+#define MAX_TOWERS 20
+#define MIN_TOWER_FLOORS 12
+#define MAX_TOWER_FLOORS 24
+
+#define M_PI_2     1.57079632679489661923
+#define M_PI_4     0.785398163397448309616
+#define M_PI_8     0.5 * M_PI_4
 
 #ifdef FORCE_ZAXIS_UP
 		int rightIndex = 0; 
@@ -72,30 +93,34 @@ float	suspensionDamping = 2.3f;
 float	suspensionCompression = 4.4f;
 float	rollInfluence = 0.1f;//1.0f;
 
+bool	boostEngine = false;
 
 btScalar suspensionRestLength(0.6);
 
 #define CUBE_HALF_EXTENTS 1
 
-
-
 ////////////////////////////////////
 
+static inline btScalar	UnitRand()
+{
+	return(rand() / (btScalar)RAND_MAX);
+}
 
-
-
-VehicleDemo::VehicleDemo()
-:
+static inline btScalar	SignedUnitRand()
+{
+	return(UnitRand() * 2 - 1);
+}
+VehicleDemo::VehicleDemo() : 
 m_carChassis(0),
 m_indexVertexArrays(0),
 m_vertices(0),
 m_cameraHeight(4.f),
 m_minCameraDistance(3.f),
-m_maxCameraDistance(10.f)
+	m_maxCameraDistance(16.f)
 {
 	m_vehicle = 0;
 	m_wheelShape = 0;
-	m_cameraPosition = btVector3(30,30,30);
+	m_cameraPosition = btVector3(45, 45, 45);
 }
 
 VehicleDemo::~VehicleDemo()
@@ -145,6 +170,52 @@ VehicleDemo::~VehicleDemo()
 	delete m_dispatcher;
 
 	delete m_collisionConfiguration;
+}
+
+
+void VehicleDemo::createTower(btScalar posX, btScalar posZ)
+{
+	//TODO: Construir una torre similar a la creada en el codigo del proyecto basicDemo
+	// la torre tiene  3x3x10 cajas y altura aleatoria entre MIN_TOWER_FLOORS y MAX_TOWER_FLOORS
+	// la torre tiene que aprecer sin derrumbarse
+	//los objetos de la  torre tienen que dormirse  y despertarse en dinamicas solo cuando le golpea algun otro objeto
+
+	btTransform startTransform;
+	startTransform.setIdentity();
+
+	//esta es la posicion de la torre en el terreno
+	float start_x = posX - ARRAY_SIZE_X / 2;
+	float start_y = START_POS_Y;
+	float start_z = posZ - ARRAY_SIZE_Z / 2;
+
+	int i, j, k;
+	//esta es la posicion inicial de los cubos
+	startTransform.setOrigin(SCALING*btVector3(
+		btScalar(2.0*i + start_x),
+		btScalar(2.0*k + start_y),
+		btScalar(2.0*j + start_z)));
+
+}
+
+btRaycastVehicle* VehicleDemo::createVagon( btRaycastVehicle* parent_vehicle)
+{
+	//TODO: constuir un vehiculo de bullet in engancharlo con una constraint al padre como si fuera un remolque
+	// devuelve un puntero al vehiculo creado
+	//NOTA: el vehiculo de bullet no tiene ruedas fisicas, para ponerserlas al remolque teneis que hacerlo en el metodo
+	// void VehicleDemo::renderme()
+	// similar a como se hace con el coche
+
+
+	if (!parent_vehicle) return 0;
+
+	btRigidBody* parent = parent_vehicle->getRigidBody();//get the rigid body of the car
+
+	btVector3 parentPos = parent->getCenterOfMassPosition();//posicion del coche
+	btVector3 aabbMin, aabbMax;
+	parent->getAabb(aabbMin, aabbMax);
+	btScalar parentSizeX = (aabbMax.getX() - aabbMin.getX()); //ancho del coche
+	btScalar parentSizeY = (aabbMax.getY() - aabbMin.getY()); //altura del coche
+	btScalar parentSizeZ = (aabbMax.getZ() - aabbMin.getZ()); //longitud del coche
 
 }
 
@@ -156,7 +227,7 @@ void VehicleDemo::initPhysics()
 	m_forwardAxis = 1;
 #endif
 
-	btCollisionShape* groundShape = new btBoxShape(btVector3(50,3,50));
+	btCollisionShape* groundShape = new btBoxShape(btVector3(500,3,500));
 	m_collisionShapes.push_back(groundShape);
 	m_collisionConfiguration = new btDefaultCollisionConfiguration();
 	m_dispatcher = new btCollisionDispatcher(m_collisionConfiguration);
@@ -172,138 +243,6 @@ void VehicleDemo::initPhysics()
 	//m_dynamicsWorld->setGravity(btVector3(0,0,0));
 btTransform tr;
 tr.setIdentity();
-
-//either use heightfield or triangle mesh
-//#define  USE_TRIMESH_GROUND 1
-#ifdef USE_TRIMESH_GROUND
-	int i;
-
-const float TRIANGLE_SIZE=20.f;
-
-	//create a triangle-mesh ground
-	int vertStride = sizeof(btVector3);
-	int indexStride = 3*sizeof(int);
-
-	const int NUM_VERTS_X = 20;
-	const int NUM_VERTS_Y = 20;
-	const int totalVerts = NUM_VERTS_X*NUM_VERTS_Y;
-	
-	const int totalTriangles = 2*(NUM_VERTS_X-1)*(NUM_VERTS_Y-1);
-
-	m_vertices = new btVector3[totalVerts];
-	int*	gIndices = new int[totalTriangles*3];
-
-	
-
-	for ( i=0;i<NUM_VERTS_X;i++)
-	{
-		for (int j=0;j<NUM_VERTS_Y;j++)
-		{
-			float wl = .2f;
-			//height set to zero, but can also use curved landscape, just uncomment out the code
-			float height = 0.f;//20.f*sinf(float(i)*wl)*cosf(float(j)*wl);
-#ifdef FORCE_ZAXIS_UP
-			m_vertices[i+j*NUM_VERTS_X].setValue(
-				(i-NUM_VERTS_X*0.5f)*TRIANGLE_SIZE,
-				(j-NUM_VERTS_Y*0.5f)*TRIANGLE_SIZE,
-				height
-				);
-
-#else
-			m_vertices[i+j*NUM_VERTS_X].setValue(
-				(i-NUM_VERTS_X*0.5f)*TRIANGLE_SIZE,
-				height,
-				(j-NUM_VERTS_Y*0.5f)*TRIANGLE_SIZE);
-#endif
-
-		}
-	}
-
-	int index=0;
-	for ( i=0;i<NUM_VERTS_X-1;i++)
-	{
-		for (int j=0;j<NUM_VERTS_Y-1;j++)
-		{
-			gIndices[index++] = j*NUM_VERTS_X+i;
-			gIndices[index++] = j*NUM_VERTS_X+i+1;
-			gIndices[index++] = (j+1)*NUM_VERTS_X+i+1;
-
-			gIndices[index++] = j*NUM_VERTS_X+i;
-			gIndices[index++] = (j+1)*NUM_VERTS_X+i+1;
-			gIndices[index++] = (j+1)*NUM_VERTS_X+i;
-		}
-	}
-	
-	m_indexVertexArrays = new btTriangleIndexVertexArray(totalTriangles,
-		gIndices,
-		indexStride,
-		totalVerts,(btScalar*) &m_vertices[0].x(),vertStride);
-
-	bool useQuantizedAabbCompression = true;
-	groundShape = new btBvhTriangleMeshShape(m_indexVertexArrays,useQuantizedAabbCompression);
-	
-	tr.setOrigin(btVector3(0,-4.5f,0));
-
-#else
-	//testing btHeightfieldTerrainShape
-	int width=128;
-	int length=128;
-	
-
-#ifdef LOAD_FROM_FILE
-	unsigned char* heightfieldData = new unsigned char[width*length];
-	{
-		for (int i=0;i<width*length;i++)
-		{
-			heightfieldData[i]=0;
-		}
-	}
-
-	char*	filename="heightfield128x128.raw";
-	FILE* heightfieldFile = fopen(filename,"r");
-	if (!heightfieldFile)
-	{
-		filename="../../heightfield128x128.raw";
-		heightfieldFile = fopen(filename,"r");
-	}
-	if (heightfieldFile)
-	{
-		int numBytes =fread(heightfieldData,1,width*length,heightfieldFile);
-		//btAssert(numBytes);
-		if (!numBytes)
-		{
-			printf("couldn't read heightfield at %s\n",filename);
-		}
-		fclose (heightfieldFile);
-	}
-#else
-	char* heightfieldData = MyHeightfield;
-#endif
-
-
-	//btScalar maxHeight = 20000.f;//exposes a bug
-	btScalar maxHeight = 100;
-	
-	bool useFloatDatam=false;
-	bool flipQuadEdges=false;
-
-	btHeightfieldTerrainShape* heightFieldShape = new btHeightfieldTerrainShape(width,length,heightfieldData,maxHeight,upIndex,useFloatDatam,flipQuadEdges);;
-	btVector3 mmin,mmax;
-	heightFieldShape->getAabb(btTransform::getIdentity(),mmin,mmax);
-
-	groundShape = heightFieldShape;
-	
-	heightFieldShape->setUseDiamondSubdivision(true);
-
-	btVector3 localScaling(100,1,100);
-	localScaling[upIndex]=1.f;
-	groundShape->setLocalScaling(localScaling);
-
-	//tr.setOrigin(btVector3(0,9940,0));
-	tr.setOrigin(btVector3(0,49.4,0));
-
-#endif //
-
 	m_collisionShapes.push_back(groundShape);
 
 	//create ground object
@@ -325,7 +264,7 @@ const float TRIANGLE_SIZE=20.f;
 	m_collisionShapes.push_back(chassisShape);
 
 	btCompoundShape* compound = new btCompoundShape();
-	m_collisionShapes.push_back(compound);
+	m_collisionShapes.push_back(compound); 
 	btTransform localTrans;
 	localTrans.setIdentity();
 	//localTrans effectively shifts the center of mass with respect to the chassis
@@ -338,10 +277,10 @@ const float TRIANGLE_SIZE=20.f;
 
 	m_carChassis = localCreateRigidBody(800,tr,compound);//chassisShape);
 	//m_carChassis->setDamping(0.2,0.2);
-	
+
 	m_wheelShape = new btCylinderShapeX(btVector3(wheelWidth,wheelRadius,wheelRadius));
 	
-	clientResetScene();
+//	clientResetScene();
 
 	/// create vehicle
 	{
@@ -356,7 +295,6 @@ const float TRIANGLE_SIZE=20.f;
 
 		float connectionHeight = 1.2f;
 
-	
 		bool isFrontWheel=true;
 
 		//choose coordinate system
@@ -452,12 +390,29 @@ void VehicleDemo::clientMoveAndDisplay()
 		m_vehicle->applyEngineForce(gEngineForce,wheelIndex);
 		m_vehicle->setBrake(gBreakingForce,wheelIndex);
 
-
 		wheelIndex = 0;
 		m_vehicle->setSteeringValue(gVehicleSteering,wheelIndex);
 		wheelIndex = 1;
 		m_vehicle->setSteeringValue(gVehicleSteering,wheelIndex);
 
+	}
+
+	if (boostEngine)
+	{
+
+		float speed = m_vehicle->getCurrentSpeedKmHour();
+		if (speed > 0)
+		{
+			float strenght = speed*4.0f;
+			btRigidBody* body = m_vehicle->getRigidBody();
+			btVector3 dir = m_vehicle->getForwardVector();
+			dir += btVector3(0, 1.0f, 0);
+			dir.normalize();
+
+			body->applyCentralImpulse(strenght*dir);
+
+		}
+		boostEngine = false;
 	}
 
 
@@ -519,8 +474,6 @@ void VehicleDemo::clientMoveAndDisplay()
 
 }
 
-
-
 void VehicleDemo::displayCallback(void) 
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
@@ -534,8 +487,6 @@ void VehicleDemo::displayCallback(void)
 	glFlush();
 	glutSwapBuffers();
 }
-
-
 
 void VehicleDemo::clientResetScene()
 {
@@ -555,8 +506,6 @@ void VehicleDemo::clientResetScene()
 	}
 
 }
-
-
 
 void VehicleDemo::specialKeyboardUp(int key, int x, int y)
 {
@@ -585,40 +534,58 @@ void VehicleDemo::specialKeyboard(int key, int x, int y)
 
 //	printf("key = %i x=%i y=%i\n",key,x,y);
 
-    switch (key) 
-    {
-    case GLUT_KEY_LEFT : 
+	int state = glutGetModifiers();
+	if (state & GLUT_ACTIVE_SHIFT)
+	{
+		switch (key)
+		{
+			case GLUT_KEY_UP:
+			{
+				boostEngine = true;
+				break;
+			}
+			default:
+				DemoApplication::specialKeyboard(key, x, y);
+				break;
+		}
+	}
+	else
+	{
+		switch (key)
+		{
+		case GLUT_KEY_LEFT:
 		{
 			gVehicleSteering += steeringIncrement;
-			if (	gVehicleSteering > steeringClamp)
-					gVehicleSteering = steeringClamp;
+			if (gVehicleSteering > steeringClamp)
+				gVehicleSteering = steeringClamp;
 
-		break;
+			break;
 		}
-    case GLUT_KEY_RIGHT : 
+		case GLUT_KEY_RIGHT:
 		{
 			gVehicleSteering -= steeringIncrement;
-			if (	gVehicleSteering < -steeringClamp)
-					gVehicleSteering = -steeringClamp;
+			if (gVehicleSteering < -steeringClamp)
+				gVehicleSteering = -steeringClamp;
 
-		break;
+			break;
 		}
-    case GLUT_KEY_UP :
+		case GLUT_KEY_UP:
 		{
 			gEngineForce = maxEngineForce;
 			gBreakingForce = 0.f;
-		break;
+			break;
 		}
-	case GLUT_KEY_DOWN :
-		{			
-			gBreakingForce = maxBreakingForce; 
+		case GLUT_KEY_DOWN:
+		{
+			gBreakingForce = maxBreakingForce;
 			gEngineForce = 0.f;
-		break;
+			break;
 		}
-	default:
-		DemoApplication::specialKeyboard(key,x,y);
-        break;
-    }
+		default:
+			DemoApplication::specialKeyboard(key, x, y);
+			break;
+		}
+	}
 
 //	glutPostRedisplay();
 
